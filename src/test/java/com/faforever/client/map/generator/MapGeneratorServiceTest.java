@@ -1,5 +1,6 @@
 package com.faforever.client.map.generator;
 
+import com.faforever.client.config.ClientProperties;
 import com.faforever.client.preferences.Preferences;
 import com.faforever.client.preferences.PreferencesService;
 import com.faforever.client.task.CompletableTask;
@@ -17,11 +18,10 @@ import org.springframework.context.ApplicationContext;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.Matchers.contains;
@@ -45,7 +45,7 @@ public class MapGeneratorServiceTest extends AbstractPlainJavaFxTest {
   private final String testMapNameGenerator = String.format(MapGeneratorService.GENERATED_MAP_NAME, versionGeneratorPresent, seed);
   private final String testMapNameUnsupportedVersion = String.format(MapGeneratorService.GENERATED_MAP_NAME, unsupportedVersion, seed);
   @Rule
-  public TemporaryFolder vaultBaseDirectory = new TemporaryFolder();
+  public TemporaryFolder customMapsDirectory = new TemporaryFolder();
   @Rule
   public TemporaryFolder fafDataDirectory = new TemporaryFolder();
   @Rule
@@ -61,11 +61,12 @@ public class MapGeneratorServiceTest extends AbstractPlainJavaFxTest {
   private DownloadMapGeneratorTask downloadMapGeneratorTask;
   @Mock
   private GenerateMapTask generateMapTask;
+  @Mock
+  private ClientProperties clientProperties;
 
   @Before
   public void setUp() throws IOException {
-    Path customMapsDir = vaultBaseDirectory.getRoot().toPath().resolve("maps");
-    Files.createDirectories(customMapsDir.resolve(testMapNameGenerator));//will be deleted on startup
+    customMapsDirectory.newFolder(testMapNameGenerator);//will be deleted on startup
 
     fafDataDirectory.newFolder(MapGeneratorService.GENERATOR_EXECUTABLE_SUB_DIRECTORY);
     String generatorExecutableName = String.format(MapGeneratorService.GENERATOR_EXECUTABLE_FILENAME, versionGeneratorPresent);
@@ -74,15 +75,13 @@ public class MapGeneratorServiceTest extends AbstractPlainJavaFxTest {
     when(preferencesService.getFafDataDirectory()).thenReturn(fafDataDirectory.getRoot().toPath());
 
     Preferences preferences = new Preferences();
-    preferences.getForgedAlliance().setVaultBaseDirectory(vaultBaseDirectory.getRoot().toPath());
+    preferences.getForgedAlliance().setCustomMapsDirectory(customMapsDirectory.getRoot().toPath());
     when(preferencesService.getPreferences()).thenReturn(preferences);
 
-    instance = new MapGeneratorService(applicationContext, preferencesService, taskService);
+    instance = new MapGeneratorService(applicationContext, preferencesService, taskService, clientProperties);
 
     instance.postConstruct();
-    Stream<Path> list = Files.list(customMapsDir);
-    assertThat(list.collect(Collectors.toList()), not(contains(testMapNameGenerator)));
-    list.close();
+    assertThat(Arrays.asList(Objects.requireNonNull(customMapsDirectory.getRoot().list())), not(contains(testMapNameGenerator)));
 
     when(downloadMapGeneratorTask.getFuture()).thenReturn(CompletableFuture.completedFuture(null));
     when(generateMapTask.getFuture()).thenReturn(CompletableFuture.completedFuture(null));
